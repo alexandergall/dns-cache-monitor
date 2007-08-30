@@ -9,13 +9,12 @@ XP=xsltproc --nonet
 
 dns-cache-monitor.8: debian/dns-cache-monitor.dbk
 	$(XP) $(DB2MAN) $<
-    
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
 	perl -w configure --prefix=/usr --with-perl=/usr/bin/perl
 	touch configure-stamp
-
 
 build: build-stamp dns-cache-monitor.8
 
@@ -41,37 +40,26 @@ install: build
 
 # Build architecture-independent files here.
 binary-indep: build install
-# We have nothing to do by default.
-
-# Build architecture-dependent files here.
-binary-arch: build install
 	dh_testdir
 	dh_testroot
 	dh_installchangelogs 
 	dh_installdocs
 	dh_installexamples
-#	dh_install
-#	dh_installmenu
 	dh_installdebconf -n
-#	dh_installlogrotate
-#	dh_installemacsen
-#	dh_installpam
-#	dh_installmime
+	dh_installlogrotate
 	dh_installinit -n -- defaults 14 84
-#	dh_installcron
-#	dh_installinfo
 	dh_installman dns-cache-monitor.8
 	dh_link
 	dh_compress
 	dh_fixperms
-#	dh_perl
-#	dh_python
-#	dh_makeshlibs
 	dh_installdeb
 	dh_shlibdeps
 	dh_gencontrol
 	dh_md5sums
 	dh_builddeb
+
+# Build architecture-dependent files here.
+binary-arch: build install
 
 binary: binary-indep binary-arch
 .PHONY: build clean binary-indep binary-arch binary install configure
