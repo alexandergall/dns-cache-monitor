@@ -1,0 +1,14 @@
+DESTDIR=
+PREFIX=@@PREFIX@@
+SBINDIR=$(DESTDIR)$(PREFIX)/sbin
+ETCDIR=$(DESTDIR)/etc
+INITDIR=$(ETCDIR)/init.d
+DEFAULTDIR=($ETCDIR)/default
+
+build:
+
+install:
+	install -D -m 0755 dns-cache-monitor $(SBINDIR)/dns-cache-monitor
+
+distclean clean:
+	rm Makefile dns-cache-monitor.8 dns-cache-monitor

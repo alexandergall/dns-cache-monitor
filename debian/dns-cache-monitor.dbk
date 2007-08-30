@@ -1,0 +1,295 @@
+<?xml version='1.0' encoding='ISO-8859-1'?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+"http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+  <!-- Fill in your name for FIRSTNAME and SURNAME. -->
+  <!ENTITY dhfirstname "<firstname>Alexander</firstname>">
+  <!ENTITY dhsurname   "<surname>Gall</surname>">
+  <!-- Please adjust the date whenever revising the manpage. -->
+  <!ENTITY dhdate      "<date>August 29, 2007</date>">
+  <!-- SECTION should be 1-8, maybe w/ subsection other parameters are
+       allowed: see man(7), man(1). -->
+  <!ENTITY dhsection   "<manvolnum>8</manvolnum>">
+  <!ENTITY dhemail     "<email>gall@switch.ch</email>">
+  <!ENTITY dhusername  "Alexander Gall">
+  <!ENTITY dhucpackage "<refentrytitle>DNS-CACHE</refentrytitle>">
+  <!ENTITY dhpackage   "dns-cache-monitor">
+
+  <!ENTITY debian      "<productname>Debian</productname>">
+  <!ENTITY gnu         "<acronym>GNU</acronym>">
+  <!ENTITY gpl         "&gnu; <acronym>GPL</acronym>">
+]>
+
+<refentry>
+  <refentryinfo>
+    <address>
+      &dhemail;
+    </address>
+    <author>
+      &dhfirstname;
+      &dhsurname;
+    </author>
+    <copyright>
+      <year>2007</year>
+      <holder>&dhusername;</holder>
+    </copyright>
+    &dhdate;
+  </refentryinfo>
+  <refmeta>
+    &dhucpackage;
+
+    &dhsection;
+  </refmeta>
+  <refnamediv>
+    <refname>&dhpackage;</refname>
+
+    <refpurpose>monitor an instance of an anycast DNS cache</refpurpose>
+  </refnamediv>
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>&dhpackage;</command>
+
+      <arg>
+      <option>--check-interval
+      <replaceable>interval</replaceable>
+      </option>
+      </arg>
+
+      <arg>
+      <option>--query
+      <replaceable>query</replaceable>
+      </option>
+      </arg>
+
+      <arg>
+      <option>--fail-threshold
+      <replaceable>threshold</replaceable>
+      </option>
+      </arg>
+
+      <arg>
+      <option>--min-holddown
+      <replaceable>minh</replaceable>
+      </option>
+      </arg>
+
+      <arg>
+      <option>--max-holddown
+      <replaceable>maxh</replaceable>
+      </option>
+      </arg>
+
+      <arg>
+      <option>--logfile
+      <replaceable>logfile</replaceable>
+      </option>
+      </arg>
+
+      <arg>
+      <option>--daemonize
+      </option>
+      </arg>
+
+      <arg>
+      <option>--pid-file
+      <replaceable>pidf</replaceable>
+      </option>
+      </arg>
+
+      <arg>
+      <option>--mailto
+      <replaceable>mailto</replaceable>
+      </option>
+      </arg>
+      
+      <replaceable>addrspec</replaceable> ...
+
+    </cmdsynopsis>
+  </refsynopsisdiv>
+  <refsect1>
+    <title>DESCRIPTION</title>
+
+    <para>The <command>&dhpackage;</command> command checks whether an
+    instance of an anycast DNS cache is working properly by monitoring
+    the corresponding loopback interfaces and making periodic DNS
+    queries that require resolution on external name servers.</para>
+
+    <para>The monitoring process implements a finite state machine.
+    The DNS cache is operational when all relevant interfaces are up
+    and the name server is able to provide answers to the test
+    queries.  When one of the interfaces goes down or the name server
+    stops responding to the test queries, the process transitons to
+    various states in which it tries to recover by reconfiguring
+    interfaces or restarting the name server.</para>
+
+    <para><replaceable>addrspec</replaceable> specifies an address and
+    an interface to monitor in the form address/interface, for example
+    130.59.31.248/lo:0 or 2001:620:0:FF::2/lo.</para>
+  </refsect1>
+  <refsect1>
+    <title>OPTIONS</title>
+
+    <para>These programs follow the usual &gnu; command line syntax,
+    with long options starting with two dashes.</para>
+
+    <variablelist>
+      <varlistentry>
+        <term>
+          <option>--help</option>
+        </term>
+        <listitem>
+          <para>Show summary of options.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--check-interval
+	  <replaceable>interval</replaceable>
+	  </option>
+        </term>
+        <listitem>
+          <para>Interval in seconds between checks. Defaults to 4.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--query
+	  <replaceable>query</replaceable>
+	  </option>
+        </term>
+        <listitem>
+          <para>DNS RRset to query in the form "Name:Type".  The RRset
+          should have a TTL of 0 such that the cache is always forced
+          to perform recursion.  This option can be specified multiple
+          times.  Defaults to cache-mon-1.net.switch.ch.:TXT and
+          cache-mon-2.net.switch.ch.:TXT</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--fail-threshold
+	  <replaceable>threshold</replaceable>
+	  </option>
+        </term>
+        <listitem>
+          <para>When the monitoring process is trying to recover from
+          a failure, it executes specific actions as part of the
+          finite state machine.  After
+          <replaceable>threshold</replaceable> consecutive actions
+          have failed, the process suspends checking for
+          <replaceable>threshold</replaceable> seconds.  When it
+          resumes checking but the next
+          <replaceable>threshold</replaceable> actions fail as well,
+          the holddown time is doubled and so forth, but the holddown
+          time does not increase beyond
+          <replaceable>maxh</replaceable> seconds.  The default
+          <replaceable>threshold</replaceable> is 3.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--min-holddown
+	  <replaceable>minh</replaceable>
+	  </option>
+        </term>
+        <listitem>
+          <para>Minimum holddown time in seconds, see
+          <option>--fail-threshold</option>.  The Default is 60.
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--max-holddown
+	  <replaceable>maxh</replaceable>
+	  </option>
+        </term>
+        <listitem>
+          <para>Maximum holddown time in seconds, see
+          <option>--fail-threshold</option>.  The Default is 7200.
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--log-file
+	  <replaceable>logfile</replaceable>
+	  </option>
+        </term>
+        <listitem>
+          <para>Path of the file write log state transitions and
+          actions to.  The Default is /var/log/bind/dns-cache-monitor.
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--daemonize
+	  </option>
+        </term>
+        <listitem>
+          <para>
+	    Detach from the controlling terminal and run in the
+	    background.  If <option>--logfile</option> is specified,
+	    standard input is redirected from /dev/null and standard
+	    output and standad error are redirected to
+	    <replaceable>logfile</replaceable>.  If
+	    <option>--logfile</option> is not specified, all standard
+	    in- and outputs are redirected from/to /dev/null.  This is
+	    not recommended.
+	  </para>
+	  <para>
+	    When this option is not specified, the process runs in the
+	    foreground and the standard in- and outputs remain
+	    unchanged.
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--pid-file
+	  <replaceable>pidf</replaceable>
+	  </option>
+        </term>
+        <listitem>
+          <para>
+	    If <option>--daemonize</option> is specified, the process
+	    ID is written to this file.  Defaults to
+	    /var/run/&dhpackage;.
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--mailto
+	  <replaceable>mailto</replaceable>
+	  </option>
+        </term>
+        <listitem>
+          <para>
+	    Reports of state changes are emailed to
+	    <replaceable>mailto</replaceable>.  The default is
+	    noc@switch.ch.
+	  </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+  <refsect1>
+    <title>SEE ALSO</title>
+  </refsect1>
+  <refsect1>
+    <title>AUTHOR</title>
+
+    <para>This manual page was written by &dhusername; &dhemail; for
+    internal usage by SWITCH but may be used by others.  Permission is
+    granted to copy, distribute and/or modify this document under the
+    terms of the &gnu; General Public License, Version 2 any later
+    version published by the Free Software Foundation.
+    </para>
+	<para>
+	  On Debian systems, the complete text of the GNU General Public
+	  License can be found in /usr/share/common-licenses/GPL.
+	</para>
+
+  </refsect1>
+</refentry>

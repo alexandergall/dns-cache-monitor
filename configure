@@ -1,0 +1,38 @@
+#!/usr/local/bin/perl -w
+
+use strict;
+use Getopt::Long;
+
+my $prefix='/usr/local';                 
+my $perl='/usr/local/bin/perl';                                                                                              
+sub usage() {
+    print <<"EOF"
+
+usage: $0 [--prefix=PREFIX] [--with-perl=PERL]
+
+EOF
+}
+
+sub substitute($$) {
+    my ($file, $subst) = @_;
+
+    open(FILE_IN, "$file.in") or 
+        die "Can't open $file.in for input: $!\n";
+    open(FILE, ">$file") or
+        die "Can't open $file for output: $!\n";
+    while (<FILE_IN>) {
+        foreach my $tag (keys(%{$subst})) {
+            s/\@\@$tag\@\@/$subst->{$tag}/g;
+        }
+        print FILE or die "Can't write to $file: $!\n";
+    }
+    close(FILE_IN) or die "Can't close $file.in: $!\n";
+    close(FILE) or die "Can't close $file: $!\n";
+}
+
+GetOptions('prefix=s' => \$prefix, 'with-perl=s' => \$perl,
+	   'help' => \&usage) or usage();
+
+substitute('Makefile', { PREFIX => $prefix});
+substitute('dns-cache-monitor', { PERL => $perl});
+1;

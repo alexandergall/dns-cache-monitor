@@ -1,0 +1,10 @@
+Template: dns-cache-monitor/address
+Type: select
+Default: DNS-CACHE.switch.ch[130.59.31.251/2001:620:0:FF::2]
+Choices: DNS-CACHE.switch.ch[130.59.31.251/2001:620:0:FF::2], DNS-CACHE2.switch.ch[130.59.31.248/2001:620:0:FF::3], DNS-CACHE-TEST.switch.ch[130.59.31.246/2001:620:0:FF::6]
+Description: Chose anycast addresses to instantiate
+
+Template: dns-cache-monitor/mailto
+Type: string
+Default: noc@switch.ch
+Description: Email address to mail changes of the dns-cache-monitor state machine to

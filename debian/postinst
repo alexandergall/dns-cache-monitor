@@ -1,0 +1,70 @@
+#! /bin/sh
+# postinst script for dns-cache-monitor
+#
+# see: dh_installdeb(1)
+
+set -e
+
+# summary of how this script can be called:
+#        * <postinst> `configure' <most-recently-configured-version>
+#        * <old-postinst> `abort-upgrade' <new version>
+#        * <conflictor's-postinst> `abort-remove' `in-favour' <package>
+#          <new-version>
+#        * <deconfigured's-postinst> `abort-deconfigure' `in-favour'
+#          <failed-install-package> <version> `removing'
+#          <conflicting-package> <version>
+# for details, see http://www.debian.org/doc/debian-policy/ or
+# the debian-policy package
+#
+
+DEFAULT=/etc/default/dns-cache-monitor
+. /usr/share/debconf/confmodule
+
+case "$1" in
+    configure)
+
+    db_get dns-cache-monitor/address
+    set -- `echo "$RET" | sed -e 's/.*\[\(.*\)\/\(.*\)\]/\1 \2/'`
+    ADDRV4=$1
+    ADDRV6=$2
+
+    db_get dns-cache-monitor/mailto
+    MAILTO=$RET
+
+    ### Grab an unused lo subinterface 
+    lo_inst=`ifconfig | grep ^lo: | cut -d' ' -f1 | cut -d: -f2 |  \
+	sort -n | tail -1`
+    lo_if=lo:`expr $lo_inst + 1`
+
+    if [ ! -f $DEFAULT ]; then
+	echo 'DAEMON_OPTS="--daemonize --mailto='$MAILTO'"' >>$DEFAULT
+    else
+	sed -e 's/mailto=\([^ "]*\)/mailto='$MAILTO'/' $DEFAULT \
+	    >$DEFAULT.tmp && mv $DEFAULT.tmp $DEFAULT
+    fi
+    cp -a -f $DEFAULT $DEFAULT.tmp
+    test -z "$ADDRV4" || grep -Eq '^ *ADDRV4=' $DEFAULT || \
+	    echo "ADDRV4=" >> $DEFAULT
+    test -z "$ADDRV6" || grep -Eq '^ *ADDRV6=' $DEFAULT || \
+	    echo "ADDRV6=" >> $DEFAULT
+    sed -e "s/^ *ADDRV4=.*/ADDRV4=\"$ADDRV4\/$lo_if\"/" \
+	-e "s/^ *ADDRV6=.*/ADDRV6=\"$ADDRV6\/lo\"/" \
+	< $DEFAULT > $DEFAULT.tmp
+    mv -f $DEFAULT.tmp $DEFAULT
+    
+    if [ -x /etc/init.d/dns-cache-monitor ]; then
+        update-rc.d dns-cache-monitor defaults 14 84 >/dev/null
+    fi
+
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+exit 0

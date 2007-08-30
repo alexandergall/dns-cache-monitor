@@ -1,0 +1,12 @@
+Source: dns-cache-monitor
+Section: net
+Priority: optional
+Maintainer: Alexander Gall <gall@switch.ch>
+Build-Depends: debhelper (>= 4.0.0), xsltproc, docbook-xsl
+Standards-Version: 3.6.1
+
+Package: dns-cache-monitor
+Architecture: all
+Depends: debconf, ${shlibs:Depends}, ${misc:Depends}, bind9 (>= 9.3.2), quagga (>=0.99.4-2), libdfa-simple-perl, mailx
+Description: DNS anycast cache monitoring tool
+

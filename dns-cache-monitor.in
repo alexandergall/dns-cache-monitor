@@ -1,0 +1,590 @@
+#!@@PERL@@ -w
+
+use strict;
+use Getopt::Long;
+use FileHandle;
+use File::Basename;
+use DFA::Simple;
+use Net::IP;
+use File::Temp qw/ tempfile /;
+use Switch;
+use POSIX 'setsid';
+
+### Net::DNS::Resolver supports IPv6 only when IO::Socket::INET6 is
+### present.  We include it here to make this dependency explicit.
+use IO::Socket::INET6 2.01;
+use Net::DNS 0.50;
+
+$ENV{PATH} = '/bin:/usr/bin:/sbin:/usr/sbin';
+$ENV{IFS} = ' ';
+
+my %opt = ( help => '',
+	    'check-interval' => 4, 
+	    logfile => '/var/log/bind/dns-cache-monitor',
+	    mailto => 'gall@switch.ch',
+	    'pid-file' => '/var/run/'.basename($0),
+	    'fail-threshold' => 3,
+	    'min-holddown' => 60,
+	    'max-holddown' => 7200);
+my (@actions, @transitions, @messages, @addresses, %events, %holddown);
+my $res = Net::DNS::Resolver->new() or die "Couldn't create resolver object";
+my $fsm = DFA::Simple->new(\@actions, \@transitions) or 
+  die "Couldn't create FSM";
+
+### Temporary files used to capture output in exec_cmd()
+my %sout = (out => (tempfile() or 
+		    die "Couldn't allocate temporary file for stdout: $!"),
+	    err => (tempfile() or 
+		    die "Couldn't allocate temporary file for stderr: $!"));
+
+my $sequence = 1;
+(my ($platform, $hostname) = split(/\s+/, `uname -n -s`)) != 2 or 
+    die "Couldn't determine platform and hostname with 'uname -n -s'";
+
+### Addresses to use per address family for the cache check if the
+### local anycast addresses are unreachable.
+my %fallback = (4 => Net::IP->new('127.0.0.1'),
+		6 => Net::IP->new('::1'));
+
+### Set of queries to perform to check whether the cache is working.
+### These RRs must have TTL 0 and should be served by different
+### authoritative servers.
+my %queries = ('cache-mon-1.net.switch.ch.' => 'TXT',
+	       'cache-mon-2.net.switch.ch.' => 'TXT');
+
+use constant {
+    ### States
+    S_NONE     => 0, # Pseudo state preceeding S_INIT
+    S_INIT     => 1,
+    S_UP       => 2,
+    S_IDOWN    => 3,
+    S_DOWN     => 4,
+    S_SHUTDOWN => 5,
+    ### Actions
+    A_IFUP       => 0,
+    A_IFDOWN     => 1,
+    A_RECONFIG   => 2,
+    A_RSET_HDOWN => 3,
+    A_STARTUP    => 4,
+    A_TERMINATE  => 5,
+};
+
+my $last_state = S_NONE;
+
+### The actions in this hash are performed whenever the state
+### is entered from a different state.
+my %states = 
+    ( (S_NONE)     => { name => 'NONE', notify => 1 },
+      (S_INIT)     => { name => 'INIT', notify => undef,
+			actions => [ A_IFUP, A_RECONFIG ] },
+      (S_UP)       => { name => 'UP', notify => 1,
+			actions => [ A_RSET_HDOWN ] },
+      (S_IDOWN)    => { name => 'IDOWN', notify => 1,
+			actions => [ A_IFUP, A_RECONFIG ] },
+      (S_DOWN)     => { name => 'DOWN', notify => 1,
+			actions => [ A_IFDOWN, A_RECONFIG ] },
+      (S_SHUTDOWN) => { name => 'SHUTDOWN' , notify => undef,
+			actions => [ A_IFDOWN, A_TERMINATE ] },
+      );
+
+### Verbose descriptions of actions for logging.
+my %actions = 
+    ( (A_IFUP)       => 'IFUP',
+      (A_IFDOWN)     => 'IFDOWN',
+      (A_RECONFIG)   => 'Reconfigure/restart BIND',
+      (A_RSET_HDOWN) => 'Reset holddown',
+      (A_STARTUP)    => 'Startup (state '.$states{(S_INIT)}{name}.')',
+      (A_TERMINATE)  => 'Terminate',
+      );
+
+### State transition tables.  Each transition is described by three
+### elements:
+###  - Number of the state to enter
+###  - Anonymous subroutine that returns true if the transition should occur
+###  - Anonymous subroutine to execute once the new state has been entered
+$transitions[S_INIT] = 
+    [
+     [
+      S_UP,
+      sub { 1; },
+      undef ],
+     ];
+
+$transitions[S_UP] = 
+    [
+     [ S_UP, 
+      sub { $events{cacheup} && $events{reach}; }, 
+       undef ],
+     [ S_IDOWN, 
+       sub { $events{cacheup} && (not $events{ifup}); }, 
+       undef ],
+     [ S_DOWN, 
+       sub { (not $events{cacheup}) ||
+		 ($events{cacheup} && 
+		  (not $events{reach}) && $events{ifup}); },
+      undef ],
+     ];
+
+$transitions[S_IDOWN] =
+    [
+     [ S_UP, 
+       sub { $events{cacheup} && $events{reach}; }, 
+       undef ],
+     [ S_IDOWN, 
+       sub { $events{cacheup} && (not $events{ifup}); },
+       sub { actions(A_IFUP, A_RECONFIG); } ],
+     [ S_DOWN, 
+       sub { (not $events{cacheup}) ||
+		 ($events{cacheup} && 
+		  (not $events{reach}) && $events{ifup}); },
+       undef ],
+     ];
+
+$transitions[S_DOWN] =
+    [
+     [ S_DOWN, 
+       sub { not $events{cacheup}; },
+       sub { actions(A_RECONFIG); } ],
+     [ S_IDOWN, 
+       sub { $events{cacheup}; },
+       undef ],
+     ];
+
+### Actions are platform dependent.  This hash is keyed by the 
+### value of `uname -s` and must implement the following actions
+### for each platform.  They must return a true value on success,
+### false on failure.
+###  isup(interface, address)
+###   check whether the interface is up
+###  ifup(interface, address)
+###   configure interface up
+###  ifdown(interface, address)
+###   configure interface down
+###  stop()
+###   stop name server
+###  start()
+###   start name server
+###  reconfig()
+###   reconfigure nameserver
+###  ping(address)
+###   send a ping with ttl 1 to address
+my %os_hooks =
+    ( SunOS => 
+      { isup =>
+	    sub {
+		my ($if, $addr) = @_;
+		exec_cmd("ifconfig $if ".
+			 ($addr->version() == 4 ? 'inet' : 'inet6').
+			 " | grep UP");
+		},
+	ifup => 
+	    sub { 
+		my ($if, $addr) = @_;
+		exec_cmd("ifconfig $if ". 
+			 ($addr->version() == 4 ? 'inet' : 'inet6').' up');
+	      },
+	ifdown =>
+	    sub {
+		my ($if, $addr) = @_;
+		exec_cmd("ifconfig $if ".
+			 ($addr->version() == 4 ? 'inet' : 'inet6')
+			 .' down');
+	    },
+	stop =>
+	    sub { exec_cmd('/etc/init.d/bind stop'); },
+	start =>
+	    sub { exec_cmd('/etc/init.d/bind start'); },
+	reconfig =>
+	    sub { exec_cmd('/etc/init.d/bind reconfig');},
+	ping => 
+	    sub { my $addr = shift;
+		  exec_cmd("ping -n -t 1 ".$addr->short()." 1");
+	      },
+    },
+      Linux =>
+      { isup =>
+	    sub {
+		my ($if, $addr) = @_;
+		my $cmd = "ifconfig | grep ^$if";
+		$addr->version == 6 and
+		    $cmd .= " >/dev/null && ifconfig $if | grep ".$addr->short();
+		exec_cmd($cmd);
+	    },
+	ifup =>
+	    sub {
+		my ($if, $addr) = @_;
+		my $cmd;
+		if ($addr->version() == 4) {
+		    $cmd = "ifconfig $if inet ".$addr->short()
+			." netmask 255.255.255.255 up";
+		} else {
+		    $cmd = "ifconfig $if add ".$addr->short()."/128";
+		}
+		exec_cmd($cmd);
+	    },
+	ifdown =>
+	    sub {
+		my ($if, $addr) = @_;
+		my $cmd;
+		if ($addr->version() == 4) {
+		    $cmd = "ifconfig $if down";
+		} else {
+		    $cmd = "ifconfig $if del ".$addr->short()."/128";
+		}
+		exec_cmd($cmd);
+	    },
+	stop =>
+	    sub { exec_cmd('/etc/init.d/bind9 stop'); },
+	start =>
+	    sub { exec_cmd('/etc/init.d/bind9 start'); },
+	reconfig =>
+	    sub { exec_cmd('/etc/init.d/bind9 reload'); },
+	ping => 
+	    sub { my $addr = shift;
+		  exec_cmd(($addr->version() == 4 ? 'ping' : 'ping6'). 
+			   ' -n -t 1 -W 1 -c 1 '.$addr->short());
+	      },
+    },
+      );
+
+sub usage() {
+    print <<"EOF";
+usage: $0 [--check-interval=<i>] [--query=<q> ...]
+              [--fail-threshold=<f>] [--min-holddown=<min>]
+              [--max-holddown=<max>] [--logfile[=<log>]]
+	      [--daemonize [--pid-file[=<pid>]]]
+              [--mailto[=<mail>]] <addrspec> ...
+
+       Monitor an instance of an anycast DNS server.
+
+       <addrspec> specifies an IPv4 or IPv6 address and the name of
+       the interface on which it is configured, joined by a slash, e.g.
+       130.59.31.251/lo0:1, 2001:620:0:ff::2/lo0:1.
+
+EOF
+exit(2);
+}
+
+sub log_msg($$) {
+    my ($category, $msg) = @_;
+
+    $msg = scalar(localtime(time()))." $category: $msg\n";
+    print LOG $msg;
+    push(@messages ,$msg)
+}    
+
+sub log_event($) {
+    log_msg('EVENT', shift);
+}
+
+sub log_action($;$) {
+    my ($action, $args) = @_;
+
+    log_msg('ACTION', $actions{$action}.($args ? " $args" : ''));
+}
+
+sub log_transition($) {
+    log_msg('TRANSITION', shift);
+}
+
+sub notify($) {
+    my ($subject) = @_;
+
+    $opt{mailto} or return;
+    open(MAIL, "| mailx -s  \"DNS cache on $hostname ".
+	 "(Seq \#$sequence): $subject\" $opt{mailto}") or 
+	 die "Failure calling mailx: $!";
+    print MAIL @messages;
+    $opt{logfile} &&
+	print MAIL "\nCheck $opt{logfile} for additional information\n";
+    close(MAIL) or warn "mailx failed: $!";
+    @messages = ();
+    $sequence++;
+}
+
+sub state_enter_action() {
+    my $state = $fsm->State();
+    exists $states{$state}{actions} and actions(@{$states{$state}{actions}});
+    $states{$state}{notify} and 
+	notify("$states{$last_state}{name} -> $states{$fsm->State()}{name}");
+}
+
+sub create_state_actions($) {
+    my ($state) = @_;
+
+    return((\&state_enter_action,
+	    sub { 
+		$last_state = $state;
+		log_transition($states{$state}{name}." -> "
+			       .$states{$fsm->State()}{name});
+	    }
+	    ));
+}
+
+sub exec_cmd($) {
+    my ($cmd) = @_;
+
+    truncate($sout{out}, 0);
+    truncate($sout{err}, 0);
+    open(OLDOUT, ">&STDOUT");
+    open(OLDERR, ">&STDERR");
+    open(STDOUT, ">>&".$sout{out}->fileno());
+    open(STDERR, ">>&".$sout{err}->fileno());
+    my $rc = system($cmd) & 0xffff;
+    open(STDOUT, ">&OLDOUT");
+    open(STDERR, ">&OLDERR");
+    close(OLDOUT);
+    close(OLDERR);
+    if ($rc != 0) {
+	my $reason;
+	if ($rc == 0xffff) {
+	    $reason = "$!";
+	} else {
+	    if (($rc & 0xff) == 0) {
+		$rc >>= 8;
+		$reason = "exit code $rc";
+	    } else {
+		$rc &= ~0x80;
+		$reason = "signal $rc";
+	    }
+	}
+	log_event("Command failed ($reason): $cmd");
+	foreach my $c ([$sout{out}, 'STDOUT'], [$sout{err}, 'STDERR']) {
+	    $c->[0]->seek(0,0);
+	    map { print LOG ' 'x4 .$c->[1].": $_"; } $c->[0]->getlines();
+	}
+    }
+    return($rc == 0);
+}
+
+sub call($;@) {
+    my ($func, @args) = @_;
+
+    exists $os_hooks{$platform}{$func} or
+	die "Undefined OS hook $platform/$func";
+    return($os_hooks{$platform}{$func}(@args));
+}
+
+sub actions(@) {
+    my %_actions;
+    @_actions{@_} = ();
+    if ($holddown{acount}++ >= $opt{'fail-threshold'} and 
+	not exists($_actions{(A_TERMINATE)})) {
+	my $htype;
+	if ($holddown{delay} == $opt{'min-holddown'})  {
+	    $htype = 'min';
+	} elsif ($holddown{delay} < $opt{'max-holddown'}) {
+	    $htype = 'backoff';
+	} else {
+	    $htype = 'max';
+	}
+	log_event("Too many failed actions, starting holddown ($htype, ".
+		  $holddown{delay}." seconds)");
+	log_event("Next attempt at ".(localtime(time()+$holddown{delay})));
+	notify("Holddown ($htype, $holddown{delay} seconds)");
+	sleep($holddown{delay});
+	$holddown{delay} = ($holddown{delay} * 2 < $opt{'max-holddown'} ?
+			    $holddown{delay} * 2 : $opt{'max-holddown'});
+	$holddown{acount} = 1;
+    }
+    foreach my $action (@_) {
+	log_action($action) unless 
+	    ($action == A_IFUP or $action == A_IFDOWN);
+	switch($action) {
+	    case A_STARTUP {
+		$fsm->State(S_INIT);
+	    }
+	    case A_IFUP {
+		for my $addr (@addresses) {
+		    unless ($addr->{up}) {
+			log_action($action, $addr->{if}."/".
+				   $addr->{ip}->short());
+			call('ifup', $addr->{if}, $addr->{ip});
+		    }
+		}
+	    }
+	    case A_IFDOWN {
+		for my $addr (@addresses) {
+		    log_action($action, $addr->{if}."/".$addr->{ip}->short());
+		    call('ifdown', $addr->{if}, $addr->{ip});
+		}
+	    }
+	    case A_RECONFIG {
+		`pkill -0 named`;
+		if ($? == 0) {
+		    call('reconfig');
+		} else {
+		    call('start');
+		}
+	    }
+	    case A_RSET_HDOWN {
+		$holddown{acount} = 0;
+		$holddown{delay} = $opt{'min-holddown'};
+	    }
+	    case A_TERMINATE {
+		close($sout{out});
+		close($sout{err});
+		close(LOG);
+		notify("Shutting down");
+		exit(0);
+	    } else {
+		die "Unknown action $action";
+	    }
+	}
+    }
+}
+	
+sub check_addresses() {
+    my ($up, $reach) = (0, 0);
+    for my $addr (@addresses) {
+	$addr->{up} = $addr->{reach} = 0;
+	if (call('isup', $addr->{if}, $addr->{ip})) {
+	    $addr->{up} = 1;
+	    $up++;
+	    if (call('ping', $addr->{ip})) {
+		$addr->{reach} = 1;
+		$reach++;
+	    } else {
+		log_event("Address ".$addr->{ip}->short()." is unreachable");
+	    }
+	} else {
+	    log_event("Interface ".$addr->{if}."/".$addr->{ip}->short().
+		      " is down");
+	}
+    }
+    return(($up == @addresses, $reach == @addresses));
+}
+
+
+### At least one query per address must succeed
+sub check_queries() {
+  ADDRESS:
+    for my $addr (@addresses) {
+	my $qa = $addr->{ip}->short();
+	if (not $addr->{reach}) {
+	    $qa = $fallback{$addr->{ip}->version()}->short();
+	}
+	$res->nameservers($qa);
+	for my $q (keys(%queries)) {
+	    my $t = $queries{$q};
+	    if (my $reply = $res->send($q, $t)) {
+		if ($reply->header->ancount == 0) {
+		    log_event("Query <$q,$t> \@$qa: empty answer section");
+		} else {
+		    next ADDRESS;
+		}
+	    } else {
+		log_event("Query <$q,$t> \@$qa failed: "
+			  .$res->errorstring());
+	    }
+	}
+	return(0);
+    }
+    return(1);
+}
+
+### Interrupt handler.  Unconditionally transition to the
+### SHUTDOWN state.  Never returns.
+sub terminate($) { 
+    my ($signal) = @_;
+
+    log_event("Received SIG$signal");
+    $fsm->State(S_SHUTDOWN);
+    ## Not reached
+    exit(0);
+}
+
+GetOptions(\%opt, 'check-interval=i', 'logfile:s', 'mailto:s', 
+	   'query=s@', 'fail-threshold=i', 'min-holddown=i', 
+	   'max-holddown=i', 'daemonize', 'pid-file=s') or usage();
+@ARGV >= 1 or usage();
+$opt{help} and usage();
+for (@ARGV) {
+    (my ($addr, $if) = split('/')) == 2 or
+	die "Invalid address/interface $_";
+    my $ip = Net::IP->new($addr) or
+	die "$addr: ".Net::IP->Error();
+    my $ver = $ip->version();
+    ($ver == 4 or $ver == 6) or 
+	die "$addr: unsupported address family";
+    push(@addresses, { ip => $ip, if => $if });
+}
+$opt{query} and undef %queries;
+foreach (@{$opt{query}}) {
+    (my ($q, $t) = split(':')) == 2 or die "Invalid query $_";
+    $queries{$q} = $t;
+}
+exists($os_hooks{$platform}) or 
+    die "Unsupported platform $platform";
+
+### Set up output channels.
+### Background (daemonized)
+###  With logfile
+###   STDOUT, STDERR, LOG > logfile (append)
+###   STDIN < /dev/null
+###  Without logfile (not recommended)
+###   STDIN, STDOUT, STDERR, LOG <> /dev/null
+### Foreground
+###   With logfile
+###    STDIN, STDOUT, STDERR unchanged
+###    LOG > logfile
+###   Without logfile
+###    STDIN, STDOUT, STDERR unchanged
+###    LOG > STDOUT
+if ($opt{logfile}) {
+    open(LOG, ">>$opt{logfile}") or 
+	die "Couldn't open log file $opt{logfile}: $!";
+    LOG->autoflush();
+    if ($opt{daemonize}) {
+	open(STDOUT, ">&LOG") or
+	    die "Couldn't redirect stdout to $opt{logfile}: $!";
+    }
+} else {
+    if ($opt{daemonize}) {
+	warn "Running as daemon but no logfile specified.  ".
+	    "All output will be discarded.\n";
+	open(STDOUT, '>/dev/null') or 
+	    die "Can't redirect stdout to /dev/null: $!";
+    }
+    open(LOG, ">&STDOUT") or 
+	die "Couldn't dup stdout for log: $!";
+}
+if ($opt{daemonize}) {
+    chdir('/') or die "Cant chdir to /: $!";
+    if (my $pid = fork()) {
+	### Parent
+	if ($opt{'pid-file'}) {
+	    open(PID, ">$opt{'pid-file'}") or 
+		die "Couldn't open PID file $opt{'pid-file'}: $!";
+	    print PID $pid or
+		die "Couldn't write PID file $opt{'pid-file'}: $!";
+	    close(PID);
+	}
+	exit(0);
+    } elsif (defined $pid) {
+	### Child
+	setsid or die "Can't start new session: $!";
+	open(STDIN, '</dev/null') or die "Can't read /dev/null: $!";
+	open(STDERR, '>&STDOUT') or die "Can't dup stdout for stderr: $!";
+    } else {
+	die "Can't fork: $!";
+    }
+}
+
+$SIG{TERM} = \&terminate;
+$SIG{INT} = \&terminate;
+## SIGUSR1 is used to wake up the process from a sleep() call.  This
+## is useful to interrupt a holddown period.
+$SIG{USR1} = sub { log_event('Received SIG'.shift); };
+$res->udp_timeout(1);
+map { $actions[$_] = [ create_state_actions($_) ] } ( S_INIT, S_UP, 
+						      S_IDOWN, S_DOWN,
+						      S_SHUTDOWN);
+actions(A_STARTUP);
+
+while(1) {
+    $fsm->Check_For_NextState();
+    sleep($opt{'check-interval'});
+    ($events{ifup}, $events{reach}) = check_addresses();
+    $events{cacheup} = check_queries();
+}
