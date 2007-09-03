@@ -7,6 +7,6 @@ Standards-Version: 3.6.1
 
 Package: dns-cache-monitor
 Architecture: all
-Depends: debconf, ${shlibs:Depends}, ${misc:Depends}, bind9 (>= 9.3.2), quagga (>=0.99.4-2), libdfa-simple-perl, mailx
+Depends: debconf, ${shlibs:Depends}, ${misc:Depends}, bind9 (>= 9.3.2), quagga (>=0.99.4-2), libnet-ip-perl, libio-socket-inet6-perl (>= 2.01),libnet-dns-perl (>= 0.50), libdfa-simple-perl, mailx
 Description: DNS anycast cache monitoring tool
 
