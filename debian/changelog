@@ -1,3 +1,9 @@
+dns-cache-monitor (0.1-2) unstable; urgency=low
+
+  * Fix dependencies on perl modules.
+
+ -- Alexander Gall <gall@switch.ch>  Mon, 3 Sep 2007 16:40:00 +0200
+
 dns-cache-monitor (0.1-1) unstable; urgency=low
 
   * Initial Release.
