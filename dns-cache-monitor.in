@@ -50,7 +50,9 @@ my %fallback = (4 => Net::IP->new('127.0.0.1'),
 ### These RRs must have TTL 0 and should be served by different
 ### authoritative servers.
 my %queries = ('cache-mon-1.net.switch.ch.' => 'TXT',
-	       'cache-mon-2.net.switch.ch.' => 'TXT');
+	       'cache-mon-2.net.switch.ch.' => 'TXT',
+	       'cache-mon-3.net.switch.ch.' => 'TXT',
+	);
 
 use constant {
     ### States
