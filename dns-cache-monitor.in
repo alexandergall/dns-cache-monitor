@@ -53,6 +53,7 @@ my %queries = ('cache-mon-1.net.switch.ch.' => 'TXT',
 	       'cache-mon-2.net.switch.ch.' => 'TXT',
 	       'cache-mon-3.net.switch.ch.' => 'TXT',
 	);
+my (@queries_keys, $ki) = ((), 0);
 
 use constant {
     ### States
@@ -467,7 +468,9 @@ sub check_queries() {
 	    $qa = $fallback{$addr->{ip}->version()}->short();
 	}
 	$res->nameservers($qa);
-	for my $q (keys(%queries)) {
+	## Cycle through the query names
+	for (my $i = 0; $i < @queries_keys; $i++) {
+	    my $q = $queries_keys[$ki++%@queries_keys];
 	    my $t = $queries{$q};
 	    if (my $reply = $res->send($q, $t)) {
 		if ($reply->header->ancount == 0) {
@@ -516,6 +519,7 @@ foreach (@{$opt{query}}) {
     (my ($q, $t) = split(':')) == 2 or die "Invalid query $_";
     $queries{$q} = $t;
 }
+@queries_keys = keys(%queries);
 exists($os_hooks{$platform}) or 
     die "Unsupported platform $platform";
 
