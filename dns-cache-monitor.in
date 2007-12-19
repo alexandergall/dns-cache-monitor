@@ -473,10 +473,15 @@ sub check_queries() {
 	    my $q = $queries_keys[$ki++%@queries_keys];
 	    my $t = $queries{$q};
 	    if (my $reply = $res->send($q, $t)) {
-		if ($reply->header->ancount == 0) {
+		if ($reply->header->rcode eq 'NOERROR') {
+		  if ($reply->header->ancount == 0) {
 		    log_event("Query <$q,$t> \@$qa: empty answer section");
-		} else {
+		  } else {
 		    next ADDRESS;
+		  }
+		} else {
+		  log_event("Query <$q,$t> \@$qa failed: rcode "
+			    .$reply->header->rcode);
 		}
 	    } else {
 		log_event("Query <$q,$t> \@$qa failed: "
