@@ -20,6 +20,7 @@ $ENV{IFS} = ' ';
 
 my %opt = ( help => '',
 	    'check-interval' => 4, 
+	    'name-server' => 'bind',
 	    logfile => '/var/log/bind/dns-cache-monitor',
 	    mailto => 'gall@switch.ch',
 	    'pid-file' => '/var/run/'.basename($0),
@@ -90,11 +91,42 @@ my %states =
 			actions => [ A_IFDOWN, A_TERMINATE ] },
       );
 
+### Supported name servers: BIND, unbound
+### Some properties depend on the manner the software was build
+### for a particular OS.  This is hard to get right and probably
+### breaks at some point.
+my %name_servers =
+    ( bind =>
+      { daemon => 'named',
+	'init-script' =>
+	{ SunOS => 'bind',
+	  Linux => 'bind9',
+      }
+    },
+      unbound =>
+      { daemon => 'unbound',
+	'init-script' =>
+	{ SunOS => 'unbound',
+	  Linux => 'unbound',
+      },
+	},
+      );
+
+sub ns_prop($;$) {
+    my ($prop, $os) = @_;
+
+    if ($os) {
+	return($name_servers{$opt{'name-server'}}{$prop}{$os});
+    } else {
+	return($name_servers{$opt{'name-server'}}{$prop});
+    }
+}
+	
 ### Verbose descriptions of actions for logging.
 my %actions = 
     ( (A_IFUP)       => 'IFUP',
       (A_IFDOWN)     => 'IFDOWN',
-      (A_RECONFIG)   => 'Reconfigure/restart BIND',
+      (A_RECONFIG)   => 'Reconfigure/restart '.ns_prop('daemon'),
       (A_RSET_HDOWN) => 'Reset holddown',
       (A_STARTUP)    => 'Startup (state '.$states{(S_INIT)}{name}.')',
       (A_TERMINATE)  => 'Terminate',
@@ -194,11 +226,14 @@ my %os_hooks =
 			 .' down');
 	    },
 	stop =>
-	    sub { exec_cmd('/etc/init.d/bind stop'); },
+	    sub { exec_cmd('/etc/init.d/'.ns_prop('init-script', 'SunOS').
+			   ' stop'); },
 	start =>
-	    sub { exec_cmd('/etc/init.d/bind start'); },
+	    sub { exec_cmd('/etc/init.d/'.ns_prop('init-script', 'SunOS').
+			   ' start'); },
 	reconfig =>
-	    sub { exec_cmd('/etc/init.d/bind reconfig');},
+	    sub { exec_cmd('/etc/init.d/'.ns_prop('init-script', 'SunOS').
+			   ' reload');},
 	ping => 
 	    sub { my $addr = shift;
 		  exec_cmd("ping -n -t 1 ".$addr->short()." 1");
@@ -237,11 +272,14 @@ my %os_hooks =
 		exec_cmd($cmd);
 	    },
 	stop =>
-	    sub { exec_cmd('/etc/init.d/bind9 stop'); },
+	    sub { exec_cmd('/etc/init.d/'.ns_prop('init-script', 'Linux').
+			   ' stop'); },
 	start =>
-	    sub { exec_cmd('/etc/init.d/bind9 start'); },
+	    sub { exec_cmd('/etc/init.d/'.ns_prop('init-script', 'Linux').
+			   ' start'); },
 	reconfig =>
-	    sub { exec_cmd('/etc/init.d/bind9 reload'); },
+	    sub { exec_cmd('/etc/init.d/'.ns_prop('init-script', 'Linux').
+			   ' reload'); },
 	ping => 
 	    sub { my $addr = shift;
 		  exec_cmd(($addr->version() == 4 ? 'ping' : 'ping6'). 
@@ -413,7 +451,8 @@ sub actions(@) {
 		}
 	    }
 	    case A_RECONFIG {
-		`pkill -0 named`;
+		my $daemon = ns_prop('daemon');
+		`pkill -0 $daemon`;
 		if ($? == 0) {
 		    call('reconfig');
 		} else {
@@ -504,8 +543,8 @@ sub terminate($) {
     exit(0);
 }
 
-GetOptions(\%opt, 'check-interval=i', 'logfile:s', 'mailto:s', 
-	   'query=s@', 'fail-threshold=i', 'min-holddown=i', 
+GetOptions(\%opt, 'check-interval=i', 'name-server:s', 'logfile:s', 
+	   'mailto:s', 'query=s@', 'fail-threshold=i', 'min-holddown=i', 
 	   'max-holddown=i', 'daemonize', 'pid-file=s') or usage();
 @ARGV >= 1 or usage();
 $opt{help} and usage();
@@ -527,6 +566,8 @@ foreach (@{$opt{query}}) {
 @queries_keys = keys(%queries);
 exists($os_hooks{$platform}) or 
     die "Unsupported platform $platform";
+exists($name_servers{$opt{'name-server'}}) or
+    die "Unsupported name server $opt{'name-server'}";
 
 ### Set up output channels.
 ### Background (daemonized)
