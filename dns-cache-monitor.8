@@ -1,0 +1,126 @@
+.\"     Title: DNS\-CACHE-MONITOR
+.\"    Author: Alexander Gall
+.\" Generator: DocBook XSL Stylesheets v1.71.0 <http://docbook.sf.net/>
+.\"      Date: August 29, 2007
+.\"    Manual: 
+.\"    Source: 
+.\"
+.TH "DNS\-CACHE" "8" "August 29, 2007" "" ""
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.SH "NAME"
+dns\-cache\-monitor \- monitor an instance of an anycast DNS cache
+.SH "SYNOPSIS"
+.HP 18
+\fBdns\-cache\-monitor\fR [\fB\-\-check\-interval\ \fR\fB\fIinterval\fR\fR\fB\ \fR] [\fB\-\-query\ \fR\fB\fIquery\fR\fR\fB\ \fR] [\fB\-\-fail\-threshold\ \fR\fB\fIthreshold\fR\fR\fB\ \fR] [\fB\-\-min\-holddown\ \fR\fB\fIminh\fR\fR\fB\ \fR] [\fB\-\-max\-holddown\ \fR\fB\fImaxh\fR\fR\fB\ \fR] [\fB\-\-logfile\ \fR\fB\fIlogfile\fR\fR\fB\ \fR] [\fB\-\-daemonize\ \fR] [\fB\-\-pid\-file\ \fR\fB\fIpidf\fR\fR\fB\ \fR] [\fB\-\-mailto\ \fR\fB\fImailto\fR\fR\fB\ \fR]\fIaddrspec\fR ...
+
+    
+.SH "DESCRIPTION"
+.PP
+The
+\fBdns\-cache\-monitor\fR
+command checks whether an instance of an anycast DNS cache is working properly by monitoring the corresponding loopback interfaces and making periodic DNS queries that require resolution on external name servers.
+.PP
+The monitoring process implements a finite state machine. The DNS cache is operational when all relevant interfaces are up and the name server is able to provide answers to the test queries. When one of the interfaces goes down or the name server stops responding to the test queries, the process transitons to various states in which it tries to recover by reconfiguring interfaces or restarting the name server.
+.PP
+\fIaddrspec\fR
+specifies an address and an interface to monitor in the form address/interface, for example 130.59.31.248/lo:0 or 2001:620:0:FF::2/lo.
+.SH "OPTIONS"
+.PP
+These programs follow the usual
+GNU
+command line syntax, with long options starting with two dashes.
+.PP
+\fB\-\-help\fR
+.RS 3n
+Show summary of options.
+.RE
+.PP
+\fB\-\-check\-interval \fR\fB\fIinterval\fR\fR\fB \fR
+.RS 3n
+Interval in seconds between checks. Defaults to 4.
+.RE
+.PP
+\fB\-\-query \fR\fB\fIquery\fR\fR\fB \fR
+.RS 3n
+DNS RRset to query in the form "Name:Type". The RRset should have a TTL of 0 such that the cache is always forced to perform recursion. This option can be specified multiple times. Defaults to cache\-mon\-1.net.switch.ch.:TXT and cache\-mon\-2.net.switch.ch.:TXT
+.RE
+.PP
+\fB\-\-fail\-threshold \fR\fB\fIthreshold\fR\fR\fB \fR
+.RS 3n
+When the monitoring process is trying to recover from a failure, it executes specific actions as part of the finite state machine. After
+\fIthreshold\fR
+consecutive actions have failed, the process suspends checking for
+\fIthreshold\fR
+seconds. When it resumes checking but the next
+\fIthreshold\fR
+actions fail as well, the holddown time is doubled and so forth, but the holddown time does not increase beyond
+\fImaxh\fR
+seconds. The default
+\fIthreshold\fR
+is 3.
+.RE
+.PP
+\fB\-\-min\-holddown \fR\fB\fIminh\fR\fR\fB \fR
+.RS 3n
+Minimum holddown time in seconds, see
+\fB\-\-fail\-threshold\fR. The Default is 60.
+.RE
+.PP
+\fB\-\-max\-holddown \fR\fB\fImaxh\fR\fR\fB \fR
+.RS 3n
+Maximum holddown time in seconds, see
+\fB\-\-fail\-threshold\fR. The Default is 7200.
+.RE
+.PP
+\fB\-\-log\-file \fR\fB\fIlogfile\fR\fR\fB \fR
+.RS 3n
+Path of the file write log state transitions and actions to. The Default is /var/log/bind/dns\-cache\-monitor.
+.RE
+.PP
+\fB\-\-daemonize \fR
+.RS 3n
+Detach from the controlling terminal and run in the background. If
+\fB\-\-logfile\fR
+is specified, standard input is redirected from /dev/null and standard output and standad error are redirected to
+\fIlogfile\fR. If
+\fB\-\-logfile\fR
+is not specified, all standard in\- and outputs are redirected from/to /dev/null. This is not recommended.
+.sp
+When this option is not specified, the process runs in the foreground and the standard in\- and outputs remain unchanged.
+.RE
+.PP
+\fB\-\-pid\-file \fR\fB\fIpidf\fR\fR\fB \fR
+.RS 3n
+If
+\fB\-\-daemonize\fR
+is specified, the process ID is written to this file. Defaults to /var/run/dns\-cache\-monitor.
+.RE
+.PP
+\fB\-\-mailto \fR\fB\fImailto\fR\fR\fB \fR
+.RS 3n
+Reports of state changes are emailed to
+\fImailto\fR. The default is noc@switch.ch.
+.RE
+.SH "SEE ALSO"
+.SH "AUTHOR"
+.PP
+This manual page was written by Alexander Gall
+<gall@switch.ch>
+for internal usage by SWITCH but may be used by others. Permission is granted to copy, distribute and/or modify this document under the terms of the
+GNU
+General Public License, Version 2 any later version published by the Free Software Foundation.
+.PP
+On Debian systems, the complete text of the GNU General Public License can be found in /usr/share/common\-licenses/GPL.
+.SH "AUTHOR"
+.PP
+\fBAlexander Gall\fR
+.sp -1n
+.IP "" 3n
+Author.
+.SH "COPYRIGHT"
+Copyright \(co 2007 Alexander Gall
+.br
+
