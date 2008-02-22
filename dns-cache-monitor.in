@@ -33,7 +33,7 @@ my $fsm = DFA::Simple->new(\@actions, \@transitions) or
   die "Couldn't create FSM";
 
 ### Number of messages to include in notifications
-$message_backlog = 15;
+my $message_backlog = 15;
 
 ### Temporary files used to capture output in exec_cmd()
 my %sout = (out => (tempfile() or 
