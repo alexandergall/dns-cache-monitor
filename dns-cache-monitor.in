@@ -32,6 +32,9 @@ my $res = Net::DNS::Resolver->new() or die "Couldn't create resolver object";
 my $fsm = DFA::Simple->new(\@actions, \@transitions) or 
   die "Couldn't create FSM";
 
+### Number of messages to include in notifications
+$message_backlog = 15;
+
 ### Temporary files used to capture output in exec_cmd()
 my %sout = (out => (tempfile() or 
 		    die "Couldn't allocate temporary file for stdout: $!"),
@@ -311,7 +314,8 @@ sub log_msg($$) {
 
     $msg = scalar(localtime(time()))." $category: $msg\n";
     print LOG $msg;
-    push(@messages ,$msg)
+    push(@messages ,$msg);
+    @messages > $message_backlog and shift(@messages);
 }    
 
 sub log_event($) {
