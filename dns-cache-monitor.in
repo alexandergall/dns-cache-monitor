@@ -294,6 +294,7 @@ my %os_hooks =
 sub usage() {
     print <<"EOF";
 usage: $0 [--check-interval=<i>] [--query=<q> ...]
+              [--name-server=bind|unbound]
               [--fail-threshold=<f>] [--min-holddown=<min>]
               [--max-holddown=<max>] [--logfile[=<log>]]
 	      [--daemonize [--pid-file[=<pid>]]]
