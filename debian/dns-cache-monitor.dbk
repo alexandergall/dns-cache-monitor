@@ -11,7 +11,7 @@
   <!ENTITY dhsection   "<manvolnum>8</manvolnum>">
   <!ENTITY dhemail     "<email>gall@switch.ch</email>">
   <!ENTITY dhusername  "Alexander Gall">
-  <!ENTITY dhucpackage "<refentrytitle>DNS-CACHE</refentrytitle>">
+  <!ENTITY dhucpackage "<refentrytitle>DNS-CACHE-MONITOR</refentrytitle>">
   <!ENTITY dhpackage   "dns-cache-monitor">
 
   <!ENTITY debian      "<productname>Debian</productname>">
@@ -61,6 +61,15 @@
       </arg>
 
       <arg>
+      <option>--name-server
+      <group choice='plain'>
+	<arg choice='plain'>bind</arg>
+	<arg choice='plain'>unbound</arg>
+      </group>
+      </option>
+      </arg>
+
+      <arg>
       <option>--fail-threshold
       <replaceable>threshold</replaceable>
       </option>
@@ -101,7 +110,9 @@
       </option>
       </arg>
       
-      <replaceable>addrspec</replaceable> ...
+      <arg rep='repeat' choice='plain'>
+      <replaceable>addrspec</replaceable>
+      </arg>	
 
     </cmdsynopsis>
   </refsynopsisdiv>
@@ -162,6 +173,21 @@
           to perform recursion.  This option can be specified multiple
           times.  Defaults to cache-mon-1.net.switch.ch.:TXT and
           cache-mon-2.net.switch.ch.:TXT</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>
+          <option>--name-server
+	    <group choice='plain'>
+              <arg choice='plain'>bind</arg>
+	      <arg choice='plain'>unbound</arg>
+            </group>
+	  </option>
+        </term>
+        <listitem>
+          <para>Select the type of name server to be used as cache.
+	  Currently supported are bind (ISC) and unbound (NLNetLabs).
+	  The default is bind.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
