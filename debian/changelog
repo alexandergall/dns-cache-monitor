@@ -1,7 +1,8 @@
 dns-cache-monitor (0.4-1) unstable; urgency=low
 
   * Support multiple name server products (currently BIND, unbound)
-
+  * Limit the number of log messages included in notifications
+	
  -- Alexander Gall <gall@switch.ch>  Wed, 11 Jan 2008 13:56:00 +0100
 
 dns-cache-monitor (0.3-1) unstable; urgency=low
