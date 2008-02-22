@@ -5,7 +5,7 @@
 .\"    Manual: 
 .\"    Source: 
 .\"
-.TH "DNS\-CACHE\-MONITOR" "8" "August 29, 2007" "" ""
+.TH "DNS\-CACHE\-MONITOR" "8" "February 22, 2008" "" ""
 .\" disable hyphenation
 .nh
 .\" disable justification (adjust text to left margin only)
@@ -14,7 +14,7 @@
 dns\-cache\-monitor \- monitor an instance of an anycast DNS cache
 .SH "SYNOPSIS"
 .HP 18
-\fBdns\-cache\-monitor\fR [\fB\-\-check\-interval\ \fR\fB\fIinterval\fR\fR\fB\ \fR] [\fB\-\-query\ \fR\fB\fIquery\fR\fR\fB\ \fR] [\fB\-\-fail\-threshold\ \fR\fB\fIthreshold\fR\fR\fB\ \fR] [\fB\-\-min\-holddown\ \fR\fB\fIminh\fR\fR\fB\ \fR] [\fB\-\-max\-holddown\ \fR\fB\fImaxh\fR\fR\fB\ \fR] [\fB\-\-logfile\ \fR\fB\fIlogfile\fR\fR\fB\ \fR] [\fB\-\-daemonize\ \fR] [\fB\-\-pid\-file\ \fR\fB\fIpidf\fR\fR\fB\ \fR] [\fB\-\-mailto\ \fR\fB\fImailto\fR\fR\fB\ \fR]\fIaddrspec\fR ...
+\fBdns\-cache\-monitor\fR [\fB\-\-check\-interval\ \fR\fB\fIinterval\fR\fR\fB\ \fR] [\fB\-\-query\ \fR\fB\fIquery\fR\fR\fB\ \fR] [\fB\-\-name\-server\ \fR\fB\fIname\-server\fR\fR\fB\ \fR] [\fB\-\-fail\-threshold\ \fR\fB\fIthreshold\fR\fR\fB\ \fR] [\fB\-\-min\-holddown\ \fR\fB\fIminh\fR\fR\fB\ \fR] [\fB\-\-max\-holddown\ \fR\fB\fImaxh\fR\fR\fB\ \fR] [\fB\-\-logfile\ \fR\fB\fIlogfile\fR\fR\fB\ \fR] [\fB\-\-daemonize\ \fR] [\fB\-\-pid\-file\ \fR\fB\fIpidf\fR\fR\fB\ \fR] [\fB\-\-mailto\ \fR\fB\fImailto\fR\fR\fB\ \fR]\fIaddrspec\fR ...
 
     
 .SH "DESCRIPTION"
@@ -46,6 +46,11 @@ Interval in seconds between checks. Defaults to 4.
 \fB\-\-query \fR\fB\fIquery\fR\fR\fB \fR
 .RS 3n
 DNS RRset to query in the form "Name:Type". The RRset should have a TTL of 0 such that the cache is always forced to perform recursion. This option can be specified multiple times. Defaults to cache\-mon\-1.net.switch.ch.:TXT and cache\-mon\-2.net.switch.ch.:TXT
+.RE
+.PP
+\fB\-\-name\-server \fR\fB\fIname-server\fR\fR\fB \fR
+.RS 3n
+Select the type of name server to be used as cache.  Currently supported are BIND (ISC) and unbound (NLNetLabs).  The default is bind.
 .RE
 .PP
 \fB\-\-fail\-threshold \fR\fB\fIthreshold\fR\fR\fB \fR
