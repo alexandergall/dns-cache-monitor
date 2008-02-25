@@ -202,7 +202,7 @@
           finite state machine.  After
           <replaceable>threshold</replaceable> consecutive actions
           have failed, the process suspends checking for
-          <replaceable>threshold</replaceable> seconds.  When it
+          <replaceable>minh</replaceable> seconds.  When it
           resumes checking but the next
           <replaceable>threshold</replaceable> actions fail as well,
           the holddown time is doubled and so forth, but the holddown
@@ -242,8 +242,9 @@
 	  </option>
         </term>
         <listitem>
-          <para>Path of the file write log state transitions and
-          actions to.  The Default is /var/log/bind/dns-cache-monitor.
+          <para>Path to the file where state transitions and
+          actions are written to.  The Default is
+	  /var/log/bind/dns-cache-monitor.
 	  </para>
         </listitem>
       </varlistentry>
@@ -255,11 +256,11 @@
         <listitem>
           <para>
 	    Detach from the controlling terminal and run in the
-	    background.  If <option>--logfile</option> is specified,
+	    background.  If <replaceable>--logfile</replaceable> is specified,
 	    standard input is redirected from /dev/null and standard
 	    output and standad error are redirected to
 	    <replaceable>logfile</replaceable>.  If
-	    <option>--logfile</option> is not specified, all standard
+	    <replaceable>--logfile</replaceable> is not specified, all standard
 	    in- and outputs are redirected from/to /dev/null.  This is
 	    not recommended.
 	  </para>
