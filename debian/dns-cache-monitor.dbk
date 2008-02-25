@@ -5,7 +5,7 @@
   <!ENTITY dhfirstname "<firstname>Alexander</firstname>">
   <!ENTITY dhsurname   "<surname>Gall</surname>">
   <!-- Please adjust the date whenever revising the manpage. -->
-  <!ENTITY dhdate      "<date>August 29, 2007</date>">
+  <!ENTITY dhdate      "<date>February 25, 2008</date>">
   <!-- SECTION should be 1-8, maybe w/ subsection other parameters are
        allowed: see man(7), man(1). -->
   <!ENTITY dhsection   "<manvolnum>8</manvolnum>">
