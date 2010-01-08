@@ -634,6 +634,12 @@ $SIG{INT} = \&terminate;
 ## is useful to interrupt a holddown period.
 $SIG{USR1} = sub { log_event('Received SIG'.shift); };
 $res->udp_timeout(1);
+## Disable DNSSEC verification.  We're only interested in whether
+## recursion works, even if we're being spoofed.  This also avoids
+## a simultaneous shutdown of all instances in case of a problem with
+## DNSSEC.
+$res->dnssec(1);
+$res->cdflag(1);
 map { $actions[$_] = [ create_state_actions($_) ] } ( S_INIT, S_UP, 
 						      S_IDOWN, S_DOWN,
 						      S_SHUTDOWN);

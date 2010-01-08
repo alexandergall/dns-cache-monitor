@@ -1,3 +1,10 @@
+dns-cache-monitor (0.5-1) unstable; urgency=low
+
+  * Set the CD flag in test queries to avoid simultaneous shutdown
+    of all instances in case of a problem with DNSSEC.
+	
+ -- Alexander Gall <gall@switch.ch>  Thu, 7 Jan 2010 16:38:00 +0100
+
 dns-cache-monitor (0.4-1) unstable; urgency=low
 
   * Support multiple name server products (currently BIND, unbound)
