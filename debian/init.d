@@ -26,8 +26,14 @@ case "$1" in
 	    log_end_msg 1
 	    exit 1
 	fi
-	start-stop-daemon --start --quiet --exec $DAEMON --pidfile $PID \
-	    --  --pid-file=$PID $DAEMON_OPTS $ADDRV4 $ADDRV6
+	## --name checks the command name in /proc/$pid/stat, but that
+	## appears to be limited to 14 characters.  Also, we must use
+	## --starts instead --exec to start a script, because the
+	## latte would check /proc/$pid/exe, which points to the
+	## executable of the interpreter (/usr/bin/perl in this case)
+	## rather than the script itself.
+	start-stop-daemon --start --name dns-cache-monit --startas $DAEMON \
+	    --pidfile $PID --  --pid-file=$PID $DAEMON_OPTS $ADDRV4 $ADDRV6
 	log_end_msg 0
 	;;
   stop)
