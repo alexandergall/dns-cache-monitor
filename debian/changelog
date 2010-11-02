@@ -1,3 +1,9 @@
+dns-cache-monitor (0.6-1) unstable; urgency=low
+
+  * Made init.d start work properly with a Perl script daemon
+	
+ -- Alexander Gall <gall@switch.ch>  Tue, 2 Nov 2010 10:40:00 +0100
+
 dns-cache-monitor (0.5-1) unstable; urgency=low
 
   * Set the CD flag in test queries to avoid simultaneous shutdown
